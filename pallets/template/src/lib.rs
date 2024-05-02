@@ -4,7 +4,6 @@
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
 /// <https://docs.substrate.io/reference/frame-pallets/>
 pub use pallet::*;
-
 #[cfg(test)]
 mod mock;
 
@@ -15,6 +14,8 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 pub use weights::*;
+use frame_support::sp_runtime::offchain::{http, Duration};
+
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -25,6 +26,15 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Offchain worker enety point.
+		fn offchain_worker(_block_number: BlockNumberFor<T>) {
+			Self::fetch_properties().unwrap();
+			log::info!("Hello world fromoffchain workers!");
+		}
+	}
+
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -32,6 +42,8 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
+		#[pallet::constant]
+        type StringLimit: Get<u32>;
 	}
 
 	// The pallet's runtime storage items.
@@ -51,6 +63,23 @@ pub mod pallet {
 		/// parameters. [something, who]
 		SomethingStored { something: u32, who: T::AccountId },
 	}
+
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+    #[scale_info(skip_type_params(T))]
+	pub struct Property {
+		id: i64,
+		bedrooms: i32,
+		bathrooms: i32,
+		number_of_images: i32,
+		number_of_floorplans: i32,
+		number_of_virtual_tours: i32,
+		summary:i32,
+		display_address:i32,
+		country_code:i32,
+		location:i32,
+	}
+	
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
@@ -103,6 +132,47 @@ pub mod pallet {
 					Ok(())
 				},
 			}
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		fn fetch_properties() -> Result<(), http::Error> {
+			let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(2_000));
+			let request = 
+				http::Request::get("https://ipfs.io/ipfs/QmRYy9yPQYHUH2He18MFnnDEyfwST27GwywLB8N2jJ9fo2?filename=p.json");
+			
+			let pending = request.deadline(deadline).send().map_err(|_| http::Error::IoError)?;
+			let response = pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
+
+			if response.code != 200 {
+				log::warn!("Unexpected status code: {}", response.code);
+				return Err(http::Error::Unknown)
+			}
+
+			let body = response.body().collect::<Vec<u8>>();
+
+			let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+				log::warn!("No UTF8 body");
+				http::Error::Unknown
+			})?;
+	
+			let price = match Self::parse_price(body_str) {
+				Some(price) => Ok(price),
+				None => {
+					log::warn!("Unable to extract price from the response: {:?}", body_str);
+					Err(http::Error::Unknown)
+				},
+			}?;
+
+			log::info!("{:?}", price);
+
+			Ok(())
+		}
+
+		fn parse_price(price_str: &str) -> Option<Property> {
+
+			let my_struct: Property = serde_json::from_str(&price_str).expect("Failed to deserialize JSON");
+			Some(my_struct)
 		}
 	}
 }

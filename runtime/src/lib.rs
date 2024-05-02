@@ -233,6 +233,7 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub FeeMultiplier: Multiplier = Multiplier::one();
+	pub const StringLimit: u32 = 5000;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -250,10 +251,12 @@ impl pallet_sudo::Config for Runtime {
 	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
+
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
+	type StringLimit = StringLimit;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
