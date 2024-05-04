@@ -43,7 +43,7 @@ std = [
 	"scale-info/std",
 	"log/std",
 	"sp-io/std",
-	"serde/std",
+	"serde",
 	"sp-std/std",
 	"lite-json/std",
 	"serde_json/std",

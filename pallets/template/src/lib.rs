@@ -49,8 +49,6 @@ pub mod pallet {
 		SomethingStored { something: u32, who: T::AccountId },
 	}
 
-	// #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo))]
-
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
     #[scale_info(skip_type_params(T))]
@@ -122,6 +120,10 @@ pub mod pallet {
 
 			let info: HackerNewsInfo<T> =
 				serde_json::from_str(&resp_str).map_err(|_| <Error<T>>::DeserializeToObjError)?;
+			
+			let c = 
+				codec::json
+
 			Ok(info)
 		}
 
