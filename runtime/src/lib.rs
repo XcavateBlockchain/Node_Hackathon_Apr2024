@@ -252,11 +252,21 @@ impl pallet_sudo::Config for Runtime {
 }
 
 
+parameter_types! {
+    pub const UnsignedPriority: u64 = 1 << 20;
+}
+
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
+	type AuthorityId = pallet_template::crypto::TestAuthId;
+    type GracePeriod = ConstU32<5>;
+    type UnsignedInterval = ConstU32<2>;
+    type UnsignedPriority = UnsignedPriority;
+    type MaxPrices = ConstU32<64>;
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
-	type StringLimit = StringLimit;
+	// type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
+	// type StringLimit = StringLimit;
+
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
