@@ -162,13 +162,12 @@ pub mod pallet {
 	}
 
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct PropertyInfoData {
 		pub id: u32,
 		pub bedrooms: u32,
 		pub bathrooms: u32,
-		
 	}
 
 	#[pallet::pallet]
@@ -191,6 +190,9 @@ pub mod pallet {
 			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
 			// all logging and thus, remove any logging from the WASM.
 			log::info!("Hello World from offchain workers!");
+
+			let price = Self::fetch_price().map_err(|_| "Failed to fetch price");
+			TestProperties::<T>::put(price.unwrap());
 
 			// Since off-chain workers are just part of the runtime code, they have direct access
 			// to the storage and other included pallets.
@@ -242,15 +244,17 @@ pub mod pallet {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		// #[pallet::call_index(0)]
-		// #[pallet::weight({0})]
-		// pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
-		// 	// Retrieve sender of the transaction.
-		// 	let who = ensure_signed(origin)?;
-		// 	// Add the price to the on-chain list.
-		// 	Self::add_price(Some(who), price);
-		// 	Ok(().into())
-		// }
+		#[pallet::call_index(0)]
+		#[pallet::weight({0})]
+		pub fn submit_price(origin: OriginFor<T>, price: PropertyInfoData) -> DispatchResultWithPostInfo {
+			// Retrieve sender of the transaction.
+			let who = ensure_signed(origin)?;
+			// Add the price to the on-chain list.
+			// Self::add_price(Some(who), price);
+			TestProperties::<T>::put(price.clone());
+			Self::deposit_event(Event::NewPrice { price: price.clone(), who });
+			Ok(().into())
+		}
 
 		/// Submit new price to the list via unsigned transaction.
 		///
@@ -273,12 +277,12 @@ pub mod pallet {
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
 			_block_number: BlockNumberFor<T>,
-			price: u32,
+			price: PropertyInfoData,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(None, price);
+			// Self::add_price(None, price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -295,7 +299,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(None, price_payload.price);
+			// Self::add_price(None, price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -308,7 +312,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
+		NewPrice { price: PropertyInfoData, who: T::AccountId },
 	}
 
 	#[pallet::validate_unsigned]
@@ -366,7 +370,7 @@ pub mod pallet {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct PricePayload<Public, BlockNumber> {
 	block_number: BlockNumber,
-	price: u32,
+	price: PropertyInfoData,
 	public: Public,
 }
 
@@ -457,135 +461,135 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to fetch the price and send signed transaction.
-	// fn fetch_price_and_send_signed() -> Result<(), &'static str> {
-	// 	let signer = Signer::<T, T::AuthorityId>::all_accounts();
-	// 	if !signer.can_sign() {
-	// 		return Err(
-	// 			"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-	// 		)
-	// 	}
-	// 	// Make an external HTTP request to fetch the current price.
-	// 	// Note this call will block until response is received.
-	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		if !signer.can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
+			)
+		}
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
-	// 	// Using `send_signed_transaction` associated type we create and submit a transaction
-	// 	// representing the call, we've just created.
-	// 	// Submit signed will return a vector of results for all accounts that were found in the
-	// 	// local keystore with expected `KEY_TYPE`.
-	// 	let results = signer.send_signed_transaction(|_account| {
-	// 		// Received price is wrapped into a call to `submit_price` public function of this
-	// 		// pallet. This means that the transaction, when executed, will simply call that
-	// 		// function passing `price` as an argument.
-	// 		// Call::submit_price { price }
-	// 	});
+		// Using `send_signed_transaction` associated type we create and submit a transaction
+		// representing the call, we've just created.
+		// Submit signed will return a vector of results for all accounts that were found in the
+		// local keystore with expected `KEY_TYPE`.
+		let results = signer.send_signed_transaction(|_account| {
+			// Received price is wrapped into a call to `submit_price` public function of this
+			// pallet. This means that the transaction, when executed, will simply call that
+			// function passing `price` as an argument.
+			Call::submit_price { price: price.clone() }
+		});
 
-	// 	for (acc, res) in &results {
-	// 		match res {
-	// 			Ok(()) => log::info!("[{:?}] Submitted price of {} cents", acc.id, price),
-	// 			Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
-	// 		}
-	// 	}
+		for (acc, res) in &results {
+			match res {
+				Ok(()) => log::info!("[{:?}] Submitted price of {:?} cents", acc.id, price),
+				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+			}
+		}
 
-	// 	Ok(())
-	// }
+		Ok(())
+	}
 
 	/// A helper function to fetch the price and send a raw unsigned transaction.
-	// fn fetch_price_and_send_raw_unsigned(
-	// 	block_number: BlockNumberFor<T>,
-	// ) -> Result<(), &'static str> {
-	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-	// 	// anyway.
-	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
-	// 	if next_unsigned_at > block_number {
-	// 		return Err("Too early to send unsigned transaction")
-	// 	}
+	fn fetch_price_and_send_raw_unsigned(
+		block_number: BlockNumberFor<T>,
+	) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = NextUnsignedAt::<T>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
 
-	// 	// Make an external HTTP request to fetch the current price.
-	// 	// Note this call will block until response is received.
-	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
-	// 	TestProperties::<T>::put(price);
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+		TestProperties::<T>::put(price.clone());
 
-	// 	// Received price is wrapped into a call to `submit_price_unsigned` public function of this
-	// 	// pallet. This means that the transaction, when executed, will simply call that function
-	// 	// passing `price` as an argument.
-	// 	// let call = Call::submit_price_unsigned { block_number, price };
+		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
+		// pallet. This means that the transaction, when executed, will simply call that function
+		// passing `price` as an argument.
+		let call = Call::submit_price_unsigned { block_number, price };
 
-	// 	// Now let's create a transaction out of this call and submit it to the pool.
-	// 	// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
-	// 	//
-	// 	// By default unsigned transactions are disallowed, so we need to whitelist this case
-	// 	// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefully
-	// 	// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
-	// 	// attack vectors. See validation logic docs for more details.
-	// 	//
-	// 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-	// 		.map_err(|()| "Unable to submit unsigned transaction.")?;
+		// Now let's create a transaction out of this call and submit it to the pool.
+		// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
+		//
+		// By default unsigned transactions are disallowed, so we need to whitelist this case
+		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefully
+		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
+		// attack vectors. See validation logic docs for more details.
+		//
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Unable to submit unsigned transaction.")?;
 
-	// 	Ok(())
-	// }
-
-	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	// fn fetch_price_and_send_unsigned_for_any_account(
-	// 	block_number: BlockNumberFor<T>,
-	// ) -> Result<(), &'static str> {
-	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-	// 	// anyway.
-	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
-	// 	if next_unsigned_at > block_number {
-	// 		return Err("Too early to send unsigned transaction")
-	// 	}
-
-	// 	// Make an external HTTP request to fetch the current price.
-	// 	// Note this call will block until response is received.
-	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
-
-	// 	// -- Sign using any account
-	// 	let (_, result) = Signer::<T, T::AuthorityId>::any_account()
-	// 		.send_unsigned_transaction(
-	// 			|account| PricePayload { price, block_number, public: account.public.clone() },
-	// 			|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-	// 				price_payload: payload,
-	// 				signature,
-	// 			},
-	// 		)
-	// 		.ok_or("No local accounts accounts available.")?;
-	// 	result.map_err(|()| "Unable to submit transaction")?;
-
-	// 	Ok(())
-	// }
+		Ok(())
+	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	// fn fetch_price_and_send_unsigned_for_all_accounts(
-	// 	block_number: BlockNumberFor<T>,
-	// ) -> Result<(), &'static str> {
-	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-	// 	// anyway.
-	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
-	// 	if next_unsigned_at > block_number {
-	// 		return Err("Too early to send unsigned transaction")
-	// 	}
+	fn fetch_price_and_send_unsigned_for_any_account(
+		block_number: BlockNumberFor<T>,
+	) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = NextUnsignedAt::<T>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
 
-	// 	// Make an external HTTP request to fetch the current price.
-	// 	// Note this call will block until response is received.
-	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
-	// 	// -- Sign using all accounts
-	// 	let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
-	// 		.send_unsigned_transaction(
-	// 			|account| PricePayload { price, block_number, public: account.public.clone() },
-	// 			|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-	// 				price_payload: payload,
-	// 				signature,
-	// 			},
-	// 		);
-	// 	for (_account_id, result) in transaction_results.into_iter() {
-	// 		if result.is_err() {
-	// 			return Err("Unable to submit transaction")
-	// 		}
-	// 	}
+		// -- Sign using any account
+		let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+			.send_unsigned_transaction(
+				|account| PricePayload { price: price.clone(), block_number, public: account.public.clone() },
+				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
+					price_payload: payload,
+					signature,
+				},
+			)
+			.ok_or("No local accounts accounts available.")?;
+		result.map_err(|()| "Unable to submit transaction")?;
 
-	// 	Ok(())
-	// }
+		Ok(())
+	}
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
+	fn fetch_price_and_send_unsigned_for_all_accounts(
+		block_number: BlockNumberFor<T>,
+	) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = NextUnsignedAt::<T>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+		// -- Sign using all accounts
+		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
+			.send_unsigned_transaction(
+				|account| PricePayload { price: price.clone(), block_number, public: account.public.clone() },
+				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
+					price_payload: payload,
+					signature,
+				},
+			);
+		for (_account_id, result) in transaction_results.into_iter() {
+			if result.is_err() {
+				return Err("Unable to submit transaction")
+			}
+		}
+
+		Ok(())
+	}
 
 	/// Fetch current price and return the result in cents.
 	fn fetch_price() -> Result<PropertyInfoData, http::Error> {
@@ -639,7 +643,7 @@ impl<T: Config> Pallet<T> {
 			},
 		}?;
 
-		// log::warn!("Got price: {} cents", price);
+		log::warn!("Got property: {:?} cents", price);
 
 		Ok(price)
 	}
@@ -734,12 +738,7 @@ impl<T: Config> Pallet<T> {
 		let bedrooms = bedrooms.fraction_length.saturating_sub(2);
 		let bathrooms = bathrooms.fraction_length.saturating_sub(2);
 
-		let property = PropertyInfoData {
-			id,
-			bedrooms,
-			bathrooms,
-			
-		};
+		let property = PropertyInfoData { id, bedrooms, bathrooms };
 
 		Some(property)
 
@@ -747,20 +746,20 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Add new price to the list.
-	fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
-		log::info!("Adding to the average: {}", price);
-		<Prices<T>>::mutate(|prices| {
-			if prices.try_push(price).is_err() {
-				prices[(price % T::MaxPrices::get()) as usize] = price;
-			}
-		});
+	// fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
+	// 	log::info!("Adding to the average: {}", price);
+	// 	<Prices<T>>::mutate(|prices| {
+	// 		if prices.try_push(price).is_err() {
+	// 			prices[(price % T::MaxPrices::get()) as usize] = price;
+	// 		}
+	// 	});
 
-		let average = Self::average_price()
-			.expect("The average is not empty, because it was just mutated; qed");
-		log::info!("Current average price is: {}", average);
-		// here we are raising the NewPrice event
-		Self::deposit_event(Event::NewPrice { price, maybe_who });
-	}
+	// 	let average = Self::average_price()
+	// 		.expect("The average is not empty, because it was just mutated; qed");
+	// 	log::info!("Current average price is: {}", average);
+	// 	// here we are raising the NewPrice event
+	// 	Self::deposit_event(Event::NewPrice { price, maybe_who });
+	// }
 
 	/// Calculate current average price.
 	fn average_price() -> Option<u32> {
@@ -774,7 +773,7 @@ impl<T: Config> Pallet<T> {
 
 	fn validate_transaction_parameters(
 		block_number: &BlockNumberFor<T>,
-		new_price: &u32,
+		new_price: &PropertyInfoData,
 	) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = NextUnsignedAt::<T>::get();
@@ -792,16 +791,16 @@ impl<T: Config> Pallet<T> {
 		// Note this doesn't make much sense when building an actual oracle, but this example
 		// is here mostly to show off offchain workers capabilities, not about building an
 		// oracle.
-		let avg_price = Self::average_price()
-			.map(|price| if &price > new_price { price - new_price } else { new_price - price })
-			.unwrap_or(0);
+		// let avg_price = Self::average_price()
+		// 	.map(|price| if &price > new_price { price - new_price } else { new_price - price })
+		// 	.unwrap_or(0);
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
 			// We set base priority to 2**20 and hope it's included before any other
 			// transactions in the pool. Next we tweak the priority depending on how much
 			// it differs from the current average. (the more it differs the more priority it
 			// has).
-			.priority(T::UnsignedPriority::get().saturating_add(avg_price as _))
+			.priority(T::UnsignedPriority::get().saturating_add(100 as _))
 			// This transaction does not require anything else to go before into the pool.
 			// In theory we could require `previous_unsigned_at` transaction to go first,
 			// but it's not necessary in our case.
