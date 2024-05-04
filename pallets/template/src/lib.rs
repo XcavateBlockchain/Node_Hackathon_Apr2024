@@ -117,7 +117,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::pallet_prelude::{OptionQuery, *};
 	use frame_system::pallet_prelude::*;
 
 	/// This pallet's configuration trait
@@ -156,6 +156,19 @@ pub mod pallet {
 		/// Maximum number of prices.
 		#[pallet::constant]
 		type MaxPrices: Get<u32>;
+
+		#[pallet::constant]
+		type StringLimit: Get<u32>;
+	}
+
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct PropertyInfoData {
+		pub id: u32,
+		pub bedrooms: u32,
+		pub bathrooms: u32,
+		
 	}
 
 	#[pallet::pallet]
@@ -197,18 +210,18 @@ pub mod pallet {
 			// depending on the block number.
 			// Usually it's enough to choose one or the other.
 			let should_send = Self::choose_transaction_type(block_number);
-			let res = match should_send {
-				TransactionType::Signed => Self::fetch_price_and_send_signed(),
-				TransactionType::UnsignedForAny =>
-					Self::fetch_price_and_send_unsigned_for_any_account(block_number),
-				TransactionType::UnsignedForAll =>
-					Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
-				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
-				TransactionType::None => Ok(()),
-			};
-			if let Err(e) = res {
-				log::error!("Error: {}", e);
-			}
+			// let res = match should_send {
+			// 	// TransactionType::Signed => Self::fetch_price_and_send_signed(),
+			// 	TransactionType::UnsignedForAny =>
+			// 		Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+			// 	TransactionType::UnsignedForAll =>
+			// 		Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
+			// 	TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
+			// 	TransactionType::None => Ok(()),
+			// };
+			// if let Err(e) = res {
+			// 	log::error!("Error: {}", e);
+			// }
 		}
 	}
 
@@ -229,15 +242,15 @@ pub mod pallet {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[pallet::call_index(0)]
-		#[pallet::weight({0})]
-		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
-			// Retrieve sender of the transaction.
-			let who = ensure_signed(origin)?;
-			// Add the price to the on-chain list.
-			Self::add_price(Some(who), price);
-			Ok(().into())
-		}
+		// #[pallet::call_index(0)]
+		// #[pallet::weight({0})]
+		// pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
+		// 	// Retrieve sender of the transaction.
+		// 	let who = ensure_signed(origin)?;
+		// 	// Add the price to the on-chain list.
+		// 	Self::add_price(Some(who), price);
+		// 	Ok(().into())
+		// }
 
 		/// Submit new price to the list via unsigned transaction.
 		///
@@ -341,6 +354,11 @@ pub mod pallet {
 	/// This storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	// A List of test properties
+	#[pallet::storage]
+	#[pallet::getter(fn testproperties)]
+	pub type TestProperties<T: Config> = StorageValue<_, PropertyInfoData, OptionQuery>;
 }
 
 /// Payload used by this example crate to hold price
@@ -439,137 +457,138 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to fetch the price and send signed transaction.
-	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
-		let signer = Signer::<T, T::AuthorityId>::all_accounts();
-		if !signer.can_sign() {
-			return Err(
-				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)
-		}
-		// Make an external HTTP request to fetch the current price.
-		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+	// fn fetch_price_and_send_signed() -> Result<(), &'static str> {
+	// 	let signer = Signer::<T, T::AuthorityId>::all_accounts();
+	// 	if !signer.can_sign() {
+	// 		return Err(
+	// 			"No local accounts available. Consider adding one via `author_insertKey` RPC.",
+	// 		)
+	// 	}
+	// 	// Make an external HTTP request to fetch the current price.
+	// 	// Note this call will block until response is received.
+	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
-		// Using `send_signed_transaction` associated type we create and submit a transaction
-		// representing the call, we've just created.
-		// Submit signed will return a vector of results for all accounts that were found in the
-		// local keystore with expected `KEY_TYPE`.
-		let results = signer.send_signed_transaction(|_account| {
-			// Received price is wrapped into a call to `submit_price` public function of this
-			// pallet. This means that the transaction, when executed, will simply call that
-			// function passing `price` as an argument.
-			Call::submit_price { price }
-		});
+	// 	// Using `send_signed_transaction` associated type we create and submit a transaction
+	// 	// representing the call, we've just created.
+	// 	// Submit signed will return a vector of results for all accounts that were found in the
+	// 	// local keystore with expected `KEY_TYPE`.
+	// 	let results = signer.send_signed_transaction(|_account| {
+	// 		// Received price is wrapped into a call to `submit_price` public function of this
+	// 		// pallet. This means that the transaction, when executed, will simply call that
+	// 		// function passing `price` as an argument.
+	// 		// Call::submit_price { price }
+	// 	});
 
-		for (acc, res) in &results {
-			match res {
-				Ok(()) => log::info!("[{:?}] Submitted price of {} cents", acc.id, price),
-				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
-			}
-		}
+	// 	for (acc, res) in &results {
+	// 		match res {
+	// 			Ok(()) => log::info!("[{:?}] Submitted price of {} cents", acc.id, price),
+	// 			Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+	// 		}
+	// 	}
 
-		Ok(())
-	}
+	// 	Ok(())
+	// }
 
 	/// A helper function to fetch the price and send a raw unsigned transaction.
-	fn fetch_price_and_send_raw_unsigned(
-		block_number: BlockNumberFor<T>,
-	) -> Result<(), &'static str> {
-		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = NextUnsignedAt::<T>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
-		}
+	// fn fetch_price_and_send_raw_unsigned(
+	// 	block_number: BlockNumberFor<T>,
+	// ) -> Result<(), &'static str> {
+	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+	// 	// anyway.
+	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
+	// 	if next_unsigned_at > block_number {
+	// 		return Err("Too early to send unsigned transaction")
+	// 	}
 
-		// Make an external HTTP request to fetch the current price.
-		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+	// 	// Make an external HTTP request to fetch the current price.
+	// 	// Note this call will block until response is received.
+	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+	// 	TestProperties::<T>::put(price);
 
-		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
-		// pallet. This means that the transaction, when executed, will simply call that function
-		// passing `price` as an argument.
-		let call = Call::submit_price_unsigned { block_number, price };
+	// 	// Received price is wrapped into a call to `submit_price_unsigned` public function of this
+	// 	// pallet. This means that the transaction, when executed, will simply call that function
+	// 	// passing `price` as an argument.
+	// 	// let call = Call::submit_price_unsigned { block_number, price };
 
-		// Now let's create a transaction out of this call and submit it to the pool.
-		// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
-		//
-		// By default unsigned transactions are disallowed, so we need to whitelist this case
-		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefully
-		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
-		// attack vectors. See validation logic docs for more details.
-		//
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-			.map_err(|()| "Unable to submit unsigned transaction.")?;
+	// 	// Now let's create a transaction out of this call and submit it to the pool.
+	// 	// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
+	// 	//
+	// 	// By default unsigned transactions are disallowed, so we need to whitelist this case
+	// 	// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefully
+	// 	// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
+	// 	// attack vectors. See validation logic docs for more details.
+	// 	//
+	// 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+	// 		.map_err(|()| "Unable to submit unsigned transaction.")?;
 
-		Ok(())
-	}
-
-	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_any_account(
-		block_number: BlockNumberFor<T>,
-	) -> Result<(), &'static str> {
-		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = NextUnsignedAt::<T>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
-		}
-
-		// Make an external HTTP request to fetch the current price.
-		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
-
-		// -- Sign using any account
-		let (_, result) = Signer::<T, T::AuthorityId>::any_account()
-			.send_unsigned_transaction(
-				|account| PricePayload { price, block_number, public: account.public.clone() },
-				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-					price_payload: payload,
-					signature,
-				},
-			)
-			.ok_or("No local accounts accounts available.")?;
-		result.map_err(|()| "Unable to submit transaction")?;
-
-		Ok(())
-	}
+	// 	Ok(())
+	// }
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned_for_all_accounts(
-		block_number: BlockNumberFor<T>,
-	) -> Result<(), &'static str> {
-		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
-		// anyway.
-		let next_unsigned_at = NextUnsignedAt::<T>::get();
-		if next_unsigned_at > block_number {
-			return Err("Too early to send unsigned transaction")
-		}
+	// fn fetch_price_and_send_unsigned_for_any_account(
+	// 	block_number: BlockNumberFor<T>,
+	// ) -> Result<(), &'static str> {
+	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+	// 	// anyway.
+	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
+	// 	if next_unsigned_at > block_number {
+	// 		return Err("Too early to send unsigned transaction")
+	// 	}
 
-		// Make an external HTTP request to fetch the current price.
-		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+	// 	// Make an external HTTP request to fetch the current price.
+	// 	// Note this call will block until response is received.
+	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
-		// -- Sign using all accounts
-		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
-			.send_unsigned_transaction(
-				|account| PricePayload { price, block_number, public: account.public.clone() },
-				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
-					price_payload: payload,
-					signature,
-				},
-			);
-		for (_account_id, result) in transaction_results.into_iter() {
-			if result.is_err() {
-				return Err("Unable to submit transaction")
-			}
-		}
+	// 	// -- Sign using any account
+	// 	let (_, result) = Signer::<T, T::AuthorityId>::any_account()
+	// 		.send_unsigned_transaction(
+	// 			|account| PricePayload { price, block_number, public: account.public.clone() },
+	// 			|payload, signature| Call::submit_price_unsigned_with_signed_payload {
+	// 				price_payload: payload,
+	// 				signature,
+	// 			},
+	// 		)
+	// 		.ok_or("No local accounts accounts available.")?;
+	// 	result.map_err(|()| "Unable to submit transaction")?;
 
-		Ok(())
-	}
+	// 	Ok(())
+	// }
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
+	// fn fetch_price_and_send_unsigned_for_all_accounts(
+	// 	block_number: BlockNumberFor<T>,
+	// ) -> Result<(), &'static str> {
+	// 	// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+	// 	// anyway.
+	// 	let next_unsigned_at = NextUnsignedAt::<T>::get();
+	// 	if next_unsigned_at > block_number {
+	// 		return Err("Too early to send unsigned transaction")
+	// 	}
+
+	// 	// Make an external HTTP request to fetch the current price.
+	// 	// Note this call will block until response is received.
+	// 	let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+	// 	// -- Sign using all accounts
+	// 	let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
+	// 		.send_unsigned_transaction(
+	// 			|account| PricePayload { price, block_number, public: account.public.clone() },
+	// 			|payload, signature| Call::submit_price_unsigned_with_signed_payload {
+	// 				price_payload: payload,
+	// 				signature,
+	// 			},
+	// 		);
+	// 	for (_account_id, result) in transaction_results.into_iter() {
+	// 		if result.is_err() {
+	// 			return Err("Unable to submit transaction")
+	// 		}
+	// 	}
+
+	// 	Ok(())
+	// }
 
 	/// Fetch current price and return the result in cents.
-	fn fetch_price() -> Result<u32, http::Error> {
+	fn fetch_price() -> Result<PropertyInfoData, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
 		// deadline to 2s to complete the external call.
 		// You can also wait indefinitely for the response, however you may still get a timeout
@@ -580,8 +599,9 @@ impl<T: Config> Pallet<T> {
 		// you can find in `sp_io`. The API is trying to be similar to `request`, but
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
-		let request =
-			http::Request::get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD");
+		let request = http::Request::get(
+			"https://ipfs.io/ipfs/QmRYy9yPQYHUH2He18MFnnDEyfwST27GwywLB8N2jJ9fo2?filename=p.json",
+		);
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
@@ -619,7 +639,7 @@ impl<T: Config> Pallet<T> {
 			},
 		}?;
 
-		log::warn!("Got price: {} cents", price);
+		// log::warn!("Got price: {} cents", price);
 
 		Ok(price)
 	}
@@ -627,11 +647,11 @@ impl<T: Config> Pallet<T> {
 	/// Parse the price from the given JSON string using `lite-json`.
 	///
 	/// Returns `None` when parsing failed or `Some(price in cents)` when parsing is successful.
-	fn parse_price(price_str: &str) -> Option<u32> {
+	fn parse_price(price_str: &str) -> Option<PropertyInfoData> {
 		let val = lite_json::parse_json(price_str);
-		let price = match val.ok()? {
+		let id = match val.ok()? {
 			JsonValue::Object(obj) => {
-				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("USD".chars()))?;
+				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("id".chars()))?;
 				match v {
 					JsonValue::Number(number) => number,
 					_ => return None,
@@ -640,8 +660,90 @@ impl<T: Config> Pallet<T> {
 			_ => return None,
 		};
 
-		let exp = price.fraction_length.saturating_sub(2);
-		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
+		// let propertyType = match val.ok()? {
+		// 	JsonValue::Object(obj) => {
+		// 		let (_, v) = obj.into_iter().find(|(k, _)|
+		// k.iter().copied().eq("propertyType".chars()))?; 		match v {
+		// 			JsonValue::String(s) => s.into_bytes().collect::<Vec<_>>(),
+		// 			_ => return None,
+		// 		}
+		// 	},
+		// 	_ => return None,
+		// };
+
+		let val = lite_json::parse_json(price_str);
+		let bedrooms = match val.ok()? {
+			JsonValue::Object(obj) => {
+				let (_, v) =
+					obj.into_iter().find(|(k, _)| k.iter().copied().eq("bedrooms".chars()))?;
+				match v {
+					JsonValue::Number(number) => number,
+					_ => return None,
+				}
+			},
+			_ => return None,
+		};
+
+		let val = lite_json::parse_json(price_str);
+		let bathrooms = match val.ok()? {
+			JsonValue::Object(obj) => {
+				let (_, v) =
+					obj.into_iter().find(|(k, _)| k.iter().copied().eq("bathrooms".chars()))?;
+				match v {
+					JsonValue::Number(number) => number,
+					_ => return None,
+				}
+			},
+			_ => return None,
+		};
+
+		// let city = match val.ok()? {
+		// 	JsonValue::Object(obj) => {
+		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("city".chars()))?;
+		// 		match v {
+		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
+		// 			 _ => return None,
+		// 		}
+		// 	},
+		// 	_ => return None,
+		// };
+
+		// let postCode = match val.ok()? {
+		// 	JsonValue::Object(obj) => {
+		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("postCode".chars()))?;
+		// 		match v {
+		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
+		// 			 _ => return None,
+		// 		}
+		// 	},
+		// 	_ => return None,
+		// };
+
+		// let keyFeatures = match val.ok()? {
+		// 	JsonValue::Object(obj) => {
+		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("keyFeatures".chars()))?;
+		// 		match v {
+		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
+		// 			 _ => return None,
+		// 		}
+		// 	},
+		// 	_ => return None,
+		// };
+
+		let id = id.fraction_length.saturating_sub(2);
+		let bedrooms = bedrooms.fraction_length.saturating_sub(2);
+		let bathrooms = bathrooms.fraction_length.saturating_sub(2);
+
+		let property = PropertyInfoData {
+			id,
+			bedrooms,
+			bathrooms,
+			
+		};
+
+		Some(property)
+
+		// Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
 	}
 
 	/// Add new price to the list.

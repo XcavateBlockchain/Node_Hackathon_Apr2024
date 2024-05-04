@@ -273,6 +273,7 @@ impl pallet_template::Config for Runtime {
     type UnsignedPriority = UnsignedPriority;
     type MaxPrices = ConstU32<64>;
 	type RuntimeEvent = RuntimeEvent;
+	type StringLimit = StringLimit;
 
 }
 
