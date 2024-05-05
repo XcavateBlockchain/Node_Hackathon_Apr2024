@@ -41,6 +41,7 @@ sp-io = { version = "23.0.0", git = "https://github.com/paritytech/polkadot-sdk.
 sp-timestamp = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
 sp-inherents = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
 sp-keyring = { version = "24.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
+sp-keystore = {git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
 frame-system = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0" }
 

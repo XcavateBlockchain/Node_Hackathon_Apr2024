@@ -162,7 +162,7 @@ pub mod pallet {
 	}
 
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, Debug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct PropertyInfoData {
 		pub id: u32,
@@ -212,18 +212,18 @@ pub mod pallet {
 			// depending on the block number.
 			// Usually it's enough to choose one or the other.
 			let should_send = Self::choose_transaction_type(block_number);
-			// let res = match should_send {
-			// 	// TransactionType::Signed => Self::fetch_price_and_send_signed(),
-			// 	TransactionType::UnsignedForAny =>
-			// 		Self::fetch_price_and_send_unsigned_for_any_account(block_number),
-			// 	TransactionType::UnsignedForAll =>
-			// 		Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
-			// 	TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
-			// 	TransactionType::None => Ok(()),
-			// };
-			// if let Err(e) = res {
-			// 	log::error!("Error: {}", e);
-			// }
+			let res = match should_send {
+				TransactionType::Signed => Self::fetch_price_and_send_signed(),
+				TransactionType::UnsignedForAny =>
+					Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+				TransactionType::UnsignedForAll =>
+					Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
+				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
+				TransactionType::None => Ok(()),
+			};
+			if let Err(e) = res {
+				log::error!("Error: {}", e);
+			}
 		}
 	}
 
@@ -246,7 +246,10 @@ pub mod pallet {
 		/// purpose is to showcase offchain worker capabilities.
 		#[pallet::call_index(0)]
 		#[pallet::weight({0})]
-		pub fn submit_price(origin: OriginFor<T>, price: PropertyInfoData) -> DispatchResultWithPostInfo {
+		pub fn submit_price(
+			origin: OriginFor<T>,
+			price: PropertyInfoData,
+		) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
 			// Add the price to the on-chain list.
@@ -367,7 +370,7 @@ pub mod pallet {
 
 /// Payload used by this example crate to hold price
 /// data required to submit a transaction.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
 pub struct PricePayload<Public, BlockNumber> {
 	block_number: BlockNumber,
 	price: PropertyInfoData,
@@ -546,7 +549,11 @@ impl<T: Config> Pallet<T> {
 		// -- Sign using any account
 		let (_, result) = Signer::<T, T::AuthorityId>::any_account()
 			.send_unsigned_transaction(
-				|account| PricePayload { price: price.clone(), block_number, public: account.public.clone() },
+				|account| PricePayload {
+					price: price.clone(),
+					block_number,
+					public: account.public.clone(),
+				},
 				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
 					price_payload: payload,
 					signature,
@@ -576,7 +583,11 @@ impl<T: Config> Pallet<T> {
 		// -- Sign using all accounts
 		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
 			.send_unsigned_transaction(
-				|account| PricePayload { price: price.clone(), block_number, public: account.public.clone() },
+				|account| PricePayload {
+					price: price.clone(),
+					block_number,
+					public: account.public.clone(),
+				},
 				|payload, signature| Call::submit_price_unsigned_with_signed_payload {
 					price_payload: payload,
 					signature,
@@ -604,8 +615,10 @@ impl<T: Config> Pallet<T> {
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
 		let request = http::Request::get(
-			"https://ipfs.io/ipfs/QmRYy9yPQYHUH2He18MFnnDEyfwST27GwywLB8N2jJ9fo2?filename=p.json",
+			"https://ipfs.io/ipfs/QmZkZUkqnJHLnM9SvxDXWoo2WYHPgQyF9YRWp5nXWe6WZ8?filename=london_new_property.json",
+			
 		);
+		
 		// We set the deadline for sending of the request, note that awaiting response can
 		// have a separate deadline. Next we send the request, before that it's also possible
 		// to alter request headers or stream body content in case of non-GET requests.
@@ -663,18 +676,6 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => return None,
 		};
-
-		// let propertyType = match val.ok()? {
-		// 	JsonValue::Object(obj) => {
-		// 		let (_, v) = obj.into_iter().find(|(k, _)|
-		// k.iter().copied().eq("propertyType".chars()))?; 		match v {
-		// 			JsonValue::String(s) => s.into_bytes().collect::<Vec<_>>(),
-		// 			_ => return None,
-		// 		}
-		// 	},
-		// 	_ => return None,
-		// };
-
 		let val = lite_json::parse_json(price_str);
 		let bedrooms = match val.ok()? {
 			JsonValue::Object(obj) => {
@@ -687,7 +688,6 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => return None,
 		};
-
 		let val = lite_json::parse_json(price_str);
 		let bathrooms = match val.ok()? {
 			JsonValue::Object(obj) => {
@@ -700,45 +700,20 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => return None,
 		};
+		
+		
+		let id = id.integer as u32;
+		let bedrooms = bedrooms.integer as u32;
+		let bathrooms = bathrooms.integer as u32;
+		
+		
 
-		// let city = match val.ok()? {
-		// 	JsonValue::Object(obj) => {
-		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("city".chars()))?;
-		// 		match v {
-		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
-		// 			 _ => return None,
-		// 		}
-		// 	},
-		// 	_ => return None,
-		// };
-
-		// let postCode = match val.ok()? {
-		// 	JsonValue::Object(obj) => {
-		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("postCode".chars()))?;
-		// 		match v {
-		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
-		// 			 _ => return None,
-		// 		}
-		// 	},
-		// 	_ => return None,
-		// };
-
-		// let keyFeatures = match val.ok()? {
-		// 	JsonValue::Object(obj) => {
-		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("keyFeatures".chars()))?;
-		// 		match v {
-		// 			JsonValue::String(s) => s.as_bytes().to_vec(),
-		// 			 _ => return None,
-		// 		}
-		// 	},
-		// 	_ => return None,
-		// };
-
-		let id = id.fraction_length.saturating_sub(2);
-		let bedrooms = bedrooms.fraction_length.saturating_sub(2);
-		let bathrooms = bathrooms.fraction_length.saturating_sub(2);
-
-		let property = PropertyInfoData { id, bedrooms, bathrooms };
+		let property = PropertyInfoData {
+			id,
+			bedrooms,
+			bathrooms,
+			
+		};
 
 		Some(property)
 
