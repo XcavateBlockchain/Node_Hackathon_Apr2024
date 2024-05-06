@@ -50,7 +50,7 @@ serde_json = { version = "1.0.111", default-features = false, features = [
 	"alloc",
 ] }
 pallet-nfts = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
-node-primitives = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
+node-primitives = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.11.0" }
 pallet-insecure-randomness-collective-flip = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
 
 # Used for the node template's RPCs
