@@ -615,7 +615,7 @@ impl<T: Config> Pallet<T> {
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
 		let request = http::Request::get(
-			"https://ipfs.io/ipfs/QmZkZUkqnJHLnM9SvxDXWoo2WYHPgQyF9YRWp5nXWe6WZ8?filename=london_new_property.json",
+			"https://ipfs.io/ipfs/QmVHvCybit6DuMx5tkPdqnB6CJLG5ReCVHAEjfneqXiZaY?filename=new_property.json",
 			
 		);
 		
