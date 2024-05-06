@@ -62,10 +62,7 @@ use sp_runtime::{
 		http,
 		storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 		Duration,
-	},
-	traits::Zero,
-	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
-	RuntimeDebug,
+	}, traits::Zero, transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction}, BoundedVec, RuntimeDebug
 };
 use sp_std::vec::Vec;
 
@@ -162,13 +159,16 @@ pub mod pallet {
 	}
 
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, Debug, TypeInfo)]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct PropertyInfoData {
+	pub struct PropertyInfoData<T: Config> {
 		pub id: u32,
 		pub bedrooms: u32,
 		pub bathrooms: u32,
+		pub summary: BoundedVec<u8, <T as Config>::StringLimit>,
 	}
+
+	
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -248,7 +248,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price(
 			origin: OriginFor<T>,
-			price: PropertyInfoData,
+			price: PropertyInfoData<T>,
 		) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -280,7 +280,7 @@ pub mod pallet {
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
 			_block_number: BlockNumberFor<T>,
-			price: PropertyInfoData,
+			price: PropertyInfoData<T>,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
@@ -296,7 +296,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
-			price_payload: PricePayload<T::Public, BlockNumberFor<T>>,
+			price_payload: PricePayload<T::Public, BlockNumberFor<T>, T>,
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -315,7 +315,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: PropertyInfoData, who: T::AccountId },
+		NewPrice { price: PropertyInfoData<T>, who: T::AccountId },
 	}
 
 	#[pallet::validate_unsigned]
@@ -365,19 +365,19 @@ pub mod pallet {
 	// A List of test properties
 	#[pallet::storage]
 	#[pallet::getter(fn testproperties)]
-	pub type TestProperties<T: Config> = StorageValue<_, PropertyInfoData, OptionQuery>;
+	pub type TestProperties<T: Config> = StorageValue<_, PropertyInfoData<T>, OptionQuery>;
 }
 
 /// Payload used by this example crate to hold price
 /// data required to submit a transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
-pub struct PricePayload<Public, BlockNumber> {
+pub struct PricePayload<Public, BlockNumber, T: Config> {
 	block_number: BlockNumber,
-	price: PropertyInfoData,
+	price: PropertyInfoData<T>,
 	public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, BlockNumberFor<T>> {
+impl<T: SigningTypes, W: Config> SignedPayload<T> for PricePayload<T::Public, BlockNumberFor<T>, W> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
@@ -603,7 +603,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Fetch current price and return the result in cents.
-	fn fetch_price() -> Result<PropertyInfoData, http::Error> {
+	fn fetch_price() -> Result<PropertyInfoData<T>, http::Error> {
 		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
 		// deadline to 2s to complete the external call.
 		// You can also wait indefinitely for the response, however you may still get a timeout
@@ -615,7 +615,7 @@ impl<T: Config> Pallet<T> {
 		// since we are running in a custom WASM execution environment we can't simply
 		// import the library here.
 		let request = http::Request::get(
-			"https://ipfs.io/ipfs/QmVHvCybit6DuMx5tkPdqnB6CJLG5ReCVHAEjfneqXiZaY?filename=new_property.json",
+			"https://ipfs.io/ipfs/QmfMH6Xdyzq1QY5AQhLKuhpkqiMYW88DCmMjQyrW7Pv9h5?filename=new_property.json",
 			
 		);
 		
@@ -656,7 +656,7 @@ impl<T: Config> Pallet<T> {
 			},
 		}?;
 
-		log::warn!("Got property: {:?} cents", price);
+		// log::warn!("Got property: {:?} cents", price);
 
 		Ok(price)
 	}
@@ -664,54 +664,144 @@ impl<T: Config> Pallet<T> {
 	/// Parse the price from the given JSON string using `lite-json`.
 	///
 	/// Returns `None` when parsing failed or `Some(price in cents)` when parsing is successful.
-	fn parse_price(price_str: &str) -> Option<PropertyInfoData> {
+	fn parse_price(price_str: &str) -> Option<PropertyInfoData<T>> {
+		// let val = lite_json::parse_json(price_str);
+		// let id = match val.ok()? {
+		// 	JsonValue::Object(obj) => {
+		// 		let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("id".chars()))?;
+		// 		match v {
+		// 			JsonValue::Number(number) => number,
+		// 			_ => return None,
+		// 		}
+		// 	},
+		// 	_ => return None,
+		// };
 		let val = lite_json::parse_json(price_str);
 		let id = match val.ok()? {
-			JsonValue::Object(obj) => {
-				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("id".chars()))?;
-				match v {
-					JsonValue::Number(number) => number,
-					_ => return None,
+			JsonValue::Array(mut arr) => {
+				// Check if the array has at least one element
+				if let Some(obj) = arr.pop() {
+					// Check if the first element is an object
+					if let JsonValue::Object(obj) = obj {
+						// Find the 'id' field in the first object
+						if let Some((_, v)) = obj.into_iter().find(|(k, _ )| k.iter().copied().eq("id".chars())) {
+							// Check if the value associated with 'id' is a number
+							if let JsonValue::Number(number) = v {
+								number
+							} else {
+								return None;
+							}
+						} else {
+							return None;
+						}
+					} else {
+						return None;
+					}
+				} else {
+					return None;
 				}
 			},
 			_ => return None,
 		};
 		let val = lite_json::parse_json(price_str);
 		let bedrooms = match val.ok()? {
-			JsonValue::Object(obj) => {
-				let (_, v) =
-					obj.into_iter().find(|(k, _)| k.iter().copied().eq("bedrooms".chars()))?;
-				match v {
-					JsonValue::Number(number) => number,
-					_ => return None,
+			JsonValue::Array(mut arr) => {
+				// Check if the array has at least one element
+				if let Some(obj) = arr.pop() {
+					// Check if the first element is an object
+					if let JsonValue::Object(obj) = obj {
+						// Find the 'bedrooms' field in the first object
+						if let Some((_, v)) = obj.into_iter().find(|(k, _ )| k.iter().copied().eq("bedrooms".chars())) {
+							// Check if the value associated with 'id' is a number
+							if let JsonValue::Number(number) = v {
+								number
+							} else {
+								return None;
+							}
+						} else {
+							return None;
+						}
+					} else {
+						return None;
+					}
+				} else {
+					return None;
 				}
 			},
 			_ => return None,
 		};
 		let val = lite_json::parse_json(price_str);
 		let bathrooms = match val.ok()? {
-			JsonValue::Object(obj) => {
-				let (_, v) =
-					obj.into_iter().find(|(k, _)| k.iter().copied().eq("bathrooms".chars()))?;
-				match v {
-					JsonValue::Number(number) => number,
-					_ => return None,
+			JsonValue::Array(mut arr) => {
+				// Check if the array has at least one element
+				if let Some(obj) = arr.pop() {
+					// Check if the first element is an object
+					if let JsonValue::Object(obj) = obj {
+						// Find the 'bathrooms' field in the first object
+						if let Some((_, v)) = obj.into_iter().find(|(k, _ )| k.iter().copied().eq("bathrooms".chars())) {
+							// Check if the value associated with 'id' is a number
+							if let JsonValue::Number(number) = v {
+								number
+							} else {
+								return None;
+							}
+						} else {
+							return None;
+						}
+					} else {
+						return None;
+					}
+				} else {
+					return None;
+				}
+			},
+			_ => return None,
+		};
+
+		
+		let val = lite_json::parse_json(price_str);
+		let summary = match val.ok()? {
+			JsonValue::Array(mut arr) => {
+				// Check if the array has at least one element
+				if let Some(obj) = arr.pop() {
+					// Check if the first element is an object
+					if let JsonValue::Object(obj) = obj {
+						// Find the 'summary' field in the first object
+						if let Some((_, v)) = obj.into_iter().find(|(k, _ )| k.iter().copied().eq("summary".chars())) {
+							// Check if the value associated with 'id' is a number
+							if let JsonValue::String(number) = v {
+								number
+							} else {
+								return None;
+							}
+						} else {
+							return None;
+						}
+					} else {
+						return None;
+					}
+				} else {
+					return None;
 				}
 			},
 			_ => return None,
 		};
 		
-		
 		let id = id.integer as u32;
 		let bedrooms = bedrooms.integer as u32;
 		let bathrooms = bathrooms.integer as u32;
-		
-		
+		let summary = summary.iter().collect::<String>();
 
+
+
+		let summary = "GB".as_bytes().to_vec().try_into().unwrap();
+		
 		let property = PropertyInfoData {
 			id,
 			bedrooms,
 			bathrooms,
+			// summary: "GB".as_bytes().to_vec().try_into().unwrap() ,
+			summary,
 			
 		};
 
@@ -748,7 +838,7 @@ impl<T: Config> Pallet<T> {
 
 	fn validate_transaction_parameters(
 		block_number: &BlockNumberFor<T>,
-		new_price: &PropertyInfoData,
+		new_price: &PropertyInfoData<T>,
 	) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = NextUnsignedAt::<T>::get();
