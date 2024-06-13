@@ -34,7 +34,7 @@ log = { version = "0.4.21", default-features = false }
 lite-json = { version = "0.2.0", default-features = false }
 
 [dev-dependencies]
-pallet-insecure-randomness-collective-flip = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
+pallet-insecure-randomness-collective-flip = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.13.0" }
 pallet-balances = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
 
 [features]
