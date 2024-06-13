@@ -27,7 +27,7 @@ sp-std = { version = "8.0.0", git = "https://github.com/paritytech/polkadot-sdk.
 sp-core = { version = "21.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0", default-features = false }
 sp-runtime = { version = "24.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.6.0", default-features = false }
 
-pallet-nfts = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
+pallet-nfts = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.13.0" }
 enumflags2 = { version = "0.7.7" }
 
 log = { version = "0.4.21", default-features = false }
