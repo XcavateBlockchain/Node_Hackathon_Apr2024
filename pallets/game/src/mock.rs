@@ -131,11 +131,14 @@ parameter_types! {
 	pub const GamePalletId: PalletId = PalletId(*b"py/rlxdl");
 	pub const MaxOngoingGame: u32 = 200;
 	pub const LeaderLimit: u32 = 10;
+	pub const MaxAdmin: u32 = 10;
+	pub const RequestLimits: BlockNumber = 180;
 }
 
 /// Configure the pallet-game in pallets/game.
 impl pallet_game::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
 	type WeightInfo = pallet_game::weights::SubstrateWeight<Test>;
 	type GameOrigin = EnsureRoot<Self::AccountId>;
 	type CollectionId = u32;
@@ -146,6 +149,8 @@ impl pallet_game::Config for Test {
 	type GameRandomness = RandomnessCollectiveFlip;
 	type StringLimit = ConstU32<5000>;
 	type LeaderboardLimit = LeaderLimit;
+	type MaxAdmins = MaxAdmin;
+	type RequestLimit = RequestLimits;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -153,13 +158,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut test = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![
-			([0; 32].into(), 1_000_000),
-			([1; 32].into(), 1_000_000),
-			([2; 32].into(), 1_000_000),
-			([3; 32].into(), 1_000_000),
-			(GameModule::account_id(), 1_000_000),
-		],
+		balances: vec![(GameModule::account_id(), 1_000_000)],
 	}
 	.assimilate_storage(&mut test)
 	.unwrap();

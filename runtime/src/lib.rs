@@ -264,16 +264,19 @@ impl sp_core::Get<u32> for MaxProperties {
 	}
 }
 
-// Define the parameter types using the custom struct.
 parameter_types! {
 	pub const GamePalletId: PalletId = PalletId(*b"py/rlxdl");
 	pub const MaxOngoingGame: u32 = 200;
 	pub const LeaderLimit: u32 = 10;
+	pub const MaxAdmin: u32 = 10;
+	pub const RequestLimits: BlockNumber = 100800;
+	pub const GameStringLimit: u32 = 500;
 }
 
 /// Configure the pallet-game in pallets/game.
 impl pallet_game::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
 	type WeightInfo = pallet_game::weights::SubstrateWeight<Runtime>;
 	type GameOrigin = EnsureRoot<Self::AccountId>;
 	type CollectionId = u32;
@@ -282,8 +285,10 @@ impl pallet_game::Config for Runtime {
 	type PalletId = GamePalletId;
 	type MaxOngoingGames = MaxOngoingGame;
 	type GameRandomness = RandomnessCollectiveFlip;
-	type StringLimit = StringLimit;
+	type StringLimit = GameStringLimit;
 	type LeaderboardLimit = LeaderLimit;
+	type MaxAdmins = MaxAdmin;
+	type RequestLimit = RequestLimits;
 }
 
 parameter_types! {
@@ -336,6 +341,10 @@ impl pallet_nfts::Config for Runtime {
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
+impl pallet_skip_feeless_payment::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
 where
 	RuntimeCall: From<LocalCall>,
@@ -367,7 +376,9 @@ where
 			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+			pallet_skip_feeless_payment::SkipCheckIfFeeless::from(
+				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+			),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
@@ -378,7 +389,7 @@ where
 			raw_payload.using_encoded(|payload| C::sign(payload, public))?;
 		let address = account;
 		let (call, extra, _) = raw_payload.deconstruct();
-		Some((call, (sp_runtime::MultiAddress::Id(address), signature.into(), extra)))
+		Some((call, (sp_runtime::MultiAddress::Id(address), signature, extra)))
 	}
 }
 
@@ -409,6 +420,7 @@ construct_runtime!(
 		GameModule: pallet_game,
 		Nfts: pallet_nfts,
 		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
+		SkipFeelessPayment: pallet_skip_feeless_payment,
 	}
 );
 
@@ -427,7 +439,10 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	pallet_skip_feeless_payment::SkipCheckIfFeeless<
+		Runtime,
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+	>,
 );
 
 /// All migrations of the runtime, aside from the ones declared in the pallets.
